@@ -2,36 +2,27 @@ import google.generativeai as genai
 import os
 import fitz # PyMuPDF
 from pathlib import Path
+from datetime import datetime
 
-# --- Configuration ---
-# NOTE: Replace the placeholder with an actual, secure API key.
 genai.configure(api_key="AIzaSyADlBTWfleg_PLTvOZ23l-6mVu4mmHNrNE")
 
 model = genai.GenerativeModel("gemini-2.5-flash")
 
-# ==========================================================
-# 🚀 NEW: DEFINE THE FILE PATH HERE
-# ==========================================================
-# IMPORTANT: Update this variable with the exact path to your PDF file.
-# You can use a raw string (r"...") for Windows paths to handle backslashes.
 PDF_FILE_PATH = "testPDFs\\bio.pdf" 
-# Example for Mac/Linux:
-# PDF_FILE_PATH = "/Users/YourName/Documents/my_chapter_notes.pdf"
-# ==========================================================
 
-# --- PDF Processing Function ---
+TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+OUTPUT_FILE_PATH = f"Mock_Exam_Generated_{TIMESTAMP}.pdf"
+
 def extract_text_from_pdf(pdf_path: str) -> str:
     """
     Extracts all text content from a PDF file using PyMuPDF (fitz).
     """
     try:
-        # Use Pathlib to check if the file exists robustly
         if not Path(pdf_path).exists():
             return f"ERROR: File not found at path: {pdf_path}"
 
         doc = fitz.open(pdf_path)
         text = ""
-        # Loop through each page and extract text
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             text += page.get_text()
@@ -40,12 +31,10 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     except Exception as e:
         return f"ERROR: An error occurred during PDF processing: {e}"
 
-# --- Exam Generation Function ---
 def generate_mock_exam(pdf_text: str):
     """
     Uses the extracted PDF text to generate a multiple-choice mock exam.
     """
-    # Craft a precise prompt to guide the model's output format
     prompt = f"""
     Based ONLY on the following text content, generate a mock exam consisting of 5 challenging multiple-choice questions.
 
@@ -55,13 +44,14 @@ def generate_mock_exam(pdf_text: str):
     3. The correct answer clearly indicated on a separate line as 'ANSWER: [Letter]'.
 
     Do not include any introductory or concluding text, just the questions and answers.
+    Ensure all questions and options are on separate lines for easy parsing.
 
     --- TEXT CONTENT START ---
     {pdf_text}
     --- TEXT CONTENT END ---
     """
 
-    print("🧠 Generating exam... (This may take a moment)")
+    print("🧠 Generating exam with Gemini... (This may take a moment)")
 
     try:
         response = model.generate_content(prompt)
@@ -69,22 +59,96 @@ def generate_mock_exam(pdf_text: str):
     except Exception as e:
         return f"ERROR: Gemini API call failed: {e}"
 
-# --- Main Execution Block ---
+def export_exam_to_pdf(exam_text: str, output_path: str):
+    """
+    Creates a readable PDF for a mock exam with proper spacing, wrapping, and page breaks.
+    """
+    import fitz
+
+    doc = fitz.open()
+    width, height = fitz.paper_rect("A4")[2:4]
+    margin = 50
+    line_spacing = 4  # space between lines
+
+    # --- First page ---
+    page = doc.new_page()
+
+    # --- Title ---
+    title_rect = fitz.Rect(margin, margin, width - margin, margin + 40)
+    page.insert_textbox(
+        title_rect,
+        "GENERATED MOCK EXAM",
+        fontname="Times-Bold",
+        fontsize=18,
+        align=fitz.TEXT_ALIGN_CENTER
+    )
+
+    y_cursor = margin + 50  # start below title
+
+    # --- Write content line by line ---
+    for line in exam_text.split('\n'):
+        line = line.strip()
+        if not line:
+            y_cursor += line_spacing 
+            continue
+
+        fontname = "Times-Roman"
+        fontsize = 10
+        color = (0, 0, 0)
+
+        if line.upper().startswith("ANSWER:"):
+            fontname = "Times-Bold"
+            color = (1, 0, 0)
+        elif line[0].isdigit() and line.find('.') < 3:
+            fontname = "Times-Bold"
+            fontsize = 11
+
+        # --- rectangle for wrapping text ---
+        max_height = height - margin - y_cursor
+        text_rect = fitz.Rect(margin, y_cursor, width - margin, y_cursor + 70)
+
+        used_height = page.insert_textbox(
+            text_rect,
+            line,
+            fontname=fontname,
+            fontsize=fontsize,
+            color=color,
+            align=fitz.TEXT_ALIGN_CENTER,
+            expandtabs=True
+        )
+        y_cursor += used_height + line_spacing
+
+        if y_cursor > height - margin:
+            page = doc.new_page()
+            y_cursor = margin
+
+    try:
+        doc.save(output_path)
+        doc.close()
+        return True
+    except Exception as e:
+        return f"ERROR: Could not save PDF file: {e}"
+
+
+
 if __name__ == "__main__":
-    print(f"📄 Attempting to read PDF from: {PDF_FILE_PATH}...")
+    print(f"Attempting to read PDF from: {PDF_FILE_PATH}...")
     
-    # 1. Extract Text
     content = extract_text_from_pdf(PDF_FILE_PATH)
     
     if content.startswith("ERROR"):
         print(f"\n{content}")
     else:
-        # 2. Generate Exam
         exam = generate_mock_exam(content)
 
-        # 3. Print Result
-        print("\n" + "="*50)
-        print("🌟 GENERATED MOCK EXAM 🌟")
-        print("="*50)
-        print(exam)
-        print("="*50 + "\n")
+        if exam.startswith("ERROR"):
+            print(f"\n{exam}")
+        else:
+            export_result = export_exam_to_pdf(exam, OUTPUT_FILE_PATH)
+
+            print("\n" + "="*50)
+            if export_result is True:
+                print("EXAM GENERATION SUCCESSFUL!")
+            else:
+                print("EXAM GENERATION FAILED.")
+                print(export_result)
