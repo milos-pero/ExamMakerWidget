@@ -1,13 +1,22 @@
 import google.generativeai as genai
 import os
-import fitz # PyMuPDF
 from pathlib import Path
 from datetime import datetime
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
+# ==========================
+# --- GEMINI CONFIG ---
+# ==========================
 genai.configure(api_key="AIzaSyADlBTWfleg_PLTvOZ23l-6mVu4mmHNrNE")
-
 model = genai.GenerativeModel("gemini-2.5-flash")
 
+# ==========================
+# --- FILE PATHS ---
+# ==========================
 PDF_FILE_PATH = "bio.pdf"
 PDF_FILE_OPTIONAL1 = "added1.pdf"
 PDF_FILE_OPTIONAL2 = "added2.pdf"
@@ -16,144 +25,143 @@ TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_EXAM_PATH = f"output/Mock_Exam_Generated_{TIMESTAMP}.pdf"
 OUTPUT_ANSW_PATH = f"output/Mock_Answers_Generated_{TIMESTAMP}.pdf"
 
+# ==========================
+# --- PDF EXTRACTION ---
+# ==========================
 def extract_text_from_pdf(pdf_path: str) -> str:
-    """
-    Extracts all text content from a PDF file using PyMuPDF (fitz).
-    """
+    """Extracts text from a given PDF using PyMuPDF (fitz)."""
     try:
+        import fitz
         if not Path(pdf_path).exists():
             return f"ERROR: File not found at path: {pdf_path}"
-
-        doc = fitz.open(pdf_path)
-        text = ""
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            text += page.get_text()
-        doc.close()
+        with fitz.open(pdf_path) as doc:
+            text = "".join(page.get_text() for page in doc)
         return text
     except Exception as e:
-        return f"ERROR: An error occurred during PDF processing: {e}"
+        return f"ERROR: {e}"
 
+# ==========================
+# --- EXAM GENERATION ---
+# ==========================
 def generate_mock_exam(pdf_text: str):
-    """
-    Uses the extracted PDF text to generate a multiple-choice mock exam.
-    """
+    """Generates a balanced mock exam from multiple subjects using Gemini."""
+    numMC = os.environ.get("num_MC_questions")
+    numFTB = os.environ.get("num_FTB_questions")
+    numTF = os.environ.get("num_TF_questions")
+    lang = os.environ.get("language", "English")
 
-    numMCquestions = os.environ.get("num_MC_questions")
-    numFTBquestions = os.environ.get("num_FTB_questions")
-    numTFquestions = os.environ.get("num_TF_questions")
-
-    numquestions = int(numMCquestions) + int(numFTBquestions) + int(numTFquestions)
-
-    lang = os.environ.get("language")
+    try:
+        numquestions = int(numMC) + int(numFTB) + int(numTF)
+    except Exception:
+        return "ERROR: Invalid or missing environment variables for question counts."
 
     prompt = f"""
-    Based ONLY on the following text content, generate a mock exam consisting of {numquestions} challenging questions.
-    The exam will have {numMCquestions} multiple-choice questions, {numFTBquestions} fill in the blank questions, {numTFquestions} true-false questions.
+    You are generating a mixed-topic exam. The text below comes from several different subjects.
+    Make sure the exam includes questions from ALL subjects represented in the text,
+    not just the first one.
 
-    Each question MUST have:
-    1. The Question text.
-    2. Exactly 4 possible answers, labeled A, B, C, and D if it is a multiple-choice question.
-    3. Exactly 4 possible answers, labeled A, B, C, and D if it is a fill in the blank question.
-    4. The correct answer clearly indicated on a separate line as 'ANSWER: [Letter]'.
-    5. Exactly 2 possible answers, labeled True or False if it is a true-false question.
+    Generate {numquestions} total questions:
+    - {numMC} multiple choice
+    - {numFTB} fill in the blank
+    - {numTF} true/false
 
-    Do not include any introductory or concluding text, just the questions and answers.
-    Ensure all questions and options are on separate lines for easy parsing.
-    Make sure the answers are found within the following text.
+    Each question must include:
+    - Four labeled answers (A-D) or True/False options
+    - A clearly marked correct answer line: "ANSWER: [Letter/True/False]"
+    Do NOT include any section headers like "Mock Exam:", "Instructions:", or "---".
+    The exam should be written in {lang}.
 
-    The exam questions and answers have to be in {lang} language, no matter the language of the given text. Translate if necessary.
-    
-    --- TEXT CONTENT START ---
+    --- TEXT START ---
     {pdf_text}
-    --- TEXT CONTENT END ---
+    --- TEXT END ---
     """
-
-    print("Generating exam with Gemini... (This may take a moment)")
 
     try:
         response = model.generate_content(prompt)
-        return response.text
+        exam_text = response.text
+
+        # --- Post-process cleanup: remove unwanted headers ---
+        cleaned_lines = []
+        skip_phrases = ["mock exam", "instructions", "multiple choice", "---"]
+        for line in exam_text.splitlines():
+            lower = line.lower().strip()
+            if any(phrase in lower for phrase in skip_phrases):
+                continue
+            cleaned_lines.append(line)
+        return "\n".join(cleaned_lines).strip()
+
     except Exception as e:
         return f"ERROR: Gemini API call failed: {e}"
 
+
+# ==========================
+# --- PDF EXPORT (ReportLab) ---
+# ==========================
 def export_exam_to_pdf(exam_text: str, output_path: str):
-    """
-    Creates a readable PDF for a mock exam with proper spacing, wrapping, and page breaks.
-    """
-    import fitz
+    """Exports the given exam text into a formatted PDF."""
+    styles = getSampleStyleSheet()
+    story = []
 
-    doc = fitz.open()
-    width, height = fitz.paper_rect("A4")[2:4]
-    margin = 50
-    line_spacing = 4  # space between lines
+    # --- Custom styles ---
+    # (use unique names to avoid collision with default ones)
+    styles.add(ParagraphStyle(name="QuestionStyle", fontName="Times-Bold", fontSize=11, spaceAfter=6, leading=14))
+    styles.add(ParagraphStyle(name="AnswerStyle", fontName="Times-Roman", fontSize=10, leftIndent=20, spaceAfter=3))
+    styles.add(ParagraphStyle(name="CorrectStyle", fontName="Times-Bold", fontSize=10, textColor=colors.red, spaceBefore=5, spaceAfter=10))
 
-    # --- First page ---
-    page = doc.new_page()
+    # Modify existing "Title" style safely
+    styles["Title"].fontName = "Times-Bold"
+    styles["Title"].fontSize = 18
+    styles["Title"].alignment = 1
+    styles["Title"].spaceAfter = 20
 
     # --- Title ---
-    title_rect = fitz.Rect(margin, margin, width - margin, margin + 40)
+    title = os.environ.get("exam_title", "GENERATED MOCK EXAM")
+    story.append(Paragraph(title, styles["Title"]))
+    story.append(Spacer(1, 12))
 
-    examtitle = os.environ.get("exam_title")
-    page.insert_textbox(
-        title_rect,
-        examtitle,
-        fontname="Times-Bold",
-        fontsize=18,
-        align=fitz.TEXT_ALIGN_CENTER
-    )
-
-    y_cursor = margin + 50  # start below title
-
-    # --- Write content line by line ---
-    for line in exam_text.split('\n'):
+    # --- Process lines ---
+    for line in exam_text.splitlines():
         line = line.strip()
         if not line:
-            y_cursor += line_spacing 
             continue
 
-        fontname = "Times-Roman"
-        fontsize = 10
-        color = (0, 0, 0)
-
         if line.upper().startswith("ANSWER:"):
-            fontname = "Times-Bold"
-            color = (1, 0, 0)
+            story.append(Paragraph(line, styles["CorrectStyle"]))
+            story.append(Spacer(1, 8))
         elif line[0].isdigit() and line.find('.') < 3:
-            fontname = "Times-Bold"
-            fontsize = 11
+            story.append(Paragraph(line, styles["QuestionStyle"]))
+        elif line.startswith(("A)", "B)", "C)", "D)")) or line.startswith(("A.", "B.", "C.", "D.")):
+            story.append(Paragraph(line, styles["AnswerStyle"]))
+        else:
+            story.append(Paragraph(line, styles["AnswerStyle"]))
 
-        # --- rectangle for wrapping text ---
-        max_height = height - margin - y_cursor
-        text_rect = fitz.Rect(margin, y_cursor, width - margin, y_cursor + 70)
+    # --- Create PDF ---
+    doc = SimpleDocTemplate(
+        output_path,
+        pagesize=A4,
+        rightMargin=50,
+        leftMargin=50,
+        topMargin=50,
+        bottomMargin=50,
+    )
 
-        used_height = page.insert_textbox(
-            text_rect,
-            line,
-            fontname=fontname,
-            fontsize=fontsize,
-            color=color,
-            align=fitz.TEXT_ALIGN_CENTER,
-            expandtabs=True
-        )
-        y_cursor += used_height + line_spacing
-
-        if y_cursor > height - margin:
-            page = doc.new_page()
-            y_cursor = margin
+    def add_page_number(canvas, doc):
+        page_num = canvas.getPageNumber()
+        canvas.setFont("Times-Roman", 9)
+        canvas.drawRightString(200 * mm, 15 * mm, str(page_num))
 
     try:
-        doc.save(output_path)
-        doc.close()
+        doc.build(story, onLaterPages=add_page_number, onFirstPage=add_page_number)
+        print(f"✅ Exported PDF: {output_path}")
         return True
     except Exception as e:
-        return f"ERROR: Could not save PDF file: {e}"
-    print(f"Exam exported to: {output_path}")
+        return f"ERROR: Could not save PDF: {e}"
 
+# ==========================
+# --- SPLIT EXAM ---
+# ==========================
 def split_exam_text(exam_text: str):
-    """
-    Splits the text into questions and answers.
-    """
+    """Splits the full exam text into question-only and answer-only parts."""
     questions, answers = [], []
     for line in exam_text.splitlines():
         if line.strip().upper().startswith("ANSWER:"):
@@ -162,58 +170,39 @@ def split_exam_text(exam_text: str):
             questions.append(line.strip())
     return "\n".join(questions), "\n".join(answers)
 
-
 def export_exam_and_answers(exam_text: str, questions_pdf: str, answers_pdf: str):
-    """
-    Splits exam text and exports questions and answers to separate PDF files.
-    """
-    questions_text, answers_text = split_exam_text(exam_text)
-
-    q_result = export_exam_to_pdf(questions_text, questions_pdf)
-    a_result = export_exam_to_pdf(answers_text, answers_pdf)
-    print(f"Questions exported to: {questions_pdf}")
-
+    """Exports separate PDFs for questions and answers."""
+    q_text, a_text = split_exam_text(exam_text)
+    q_result = export_exam_to_pdf(q_text, questions_pdf)
+    a_result = export_exam_to_pdf(a_text, answers_pdf)
     return q_result, a_result
 
-
+# ==========================
+# --- MAIN ---
+# ==========================
 if __name__ == "__main__":
-    print(f"Attempting to read main PDF from: {PDF_FILE_PATH}...")
+    print(f"Reading: {PDF_FILE_PATH}")
     combined_content = ""
 
-    # --- Always process the main PDF ---
-    main_content = extract_text_from_pdf(PDF_FILE_PATH)
-    if main_content.startswith("ERROR"):
-        print(f"\n{main_content}")
+    main_text = extract_text_from_pdf(PDF_FILE_PATH)
+    if main_text.startswith("ERROR"):
+        print(main_text)
         exit(1)
-    combined_content += main_content
+    combined_content += main_text
 
-    # --- Optional PDFs ---
-    optional_pdfs = [PDF_FILE_OPTIONAL1, PDF_FILE_OPTIONAL2]
-    for i, pdf_path in enumerate(optional_pdfs, start=1):
-        default_name = f"added{i}.pdf"
-        if not Path(pdf_path).exists():
-            print(f"Skipping optional PDF {i}: file not found ({pdf_path})")
-            continue
+    # Optional PDFs
+    for extra_path in [PDF_FILE_OPTIONAL1, PDF_FILE_OPTIONAL2]:
+        if Path(extra_path).exists():
+            combined_content += "\n\n" + extract_text_from_pdf(extra_path)
 
-        print(f"Extracting text from optional PDF {i}: {pdf_path}")
-        extra_content = extract_text_from_pdf(pdf_path)
-        if extra_content.startswith("ERROR"):
-            print(f"Warning: Could not process optional PDF {i}: {extra_content}")
-        else:
-            combined_content += "\n\n" + extra_content
-
-    # --- Now combined_content contains text from all valid PDFs ---
-    print("\nGenerating exam from combined content...")
+    print("Generating exam...")
     exam = generate_mock_exam(combined_content)
 
     if exam.startswith("ERROR"):
-        print(f"\n{exam}")
+        print(exam)
     else:
         splitexam = os.environ.get("split_exam")
-        print(f"Split exam mode: {splitexam}")
-
         if splitexam in [False, "False", "false", None]:
             export_exam_to_pdf(exam, OUTPUT_EXAM_PATH)
         else:
             export_exam_and_answers(exam, OUTPUT_EXAM_PATH, OUTPUT_ANSW_PATH)
-
