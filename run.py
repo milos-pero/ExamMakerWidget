@@ -9,6 +9,8 @@ genai.configure(api_key="AIzaSyADlBTWfleg_PLTvOZ23l-6mVu4mmHNrNE")
 model = genai.GenerativeModel("gemini-2.5-flash")
 
 PDF_FILE_PATH = "bio.pdf"
+PDF_FILE_OPTIONAL1 = "added1.pdf"
+PDF_FILE_OPTIONAL2 = "added2.pdf"
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_EXAM_PATH = f"output/Mock_Exam_Generated_{TIMESTAMP}.pdf"
@@ -175,21 +177,43 @@ def export_exam_and_answers(exam_text: str, questions_pdf: str, answers_pdf: str
 
 
 if __name__ == "__main__":
-    print(f"Attempting to read PDF from: {PDF_FILE_PATH}...")
-    
-    content = extract_text_from_pdf(PDF_FILE_PATH)
-    
-    if content.startswith("ERROR"):
-        print(f"\n{content}")
-    else:
-        exam = generate_mock_exam(content)
+    print(f"Attempting to read main PDF from: {PDF_FILE_PATH}...")
+    combined_content = ""
 
-        if exam.startswith("ERROR"):
-            print(f"\n{exam}")
+    # --- Always process the main PDF ---
+    main_content = extract_text_from_pdf(PDF_FILE_PATH)
+    if main_content.startswith("ERROR"):
+        print(f"\n{main_content}")
+        exit(1)
+    combined_content += main_content
+
+    # --- Optional PDFs ---
+    optional_pdfs = [PDF_FILE_OPTIONAL1, PDF_FILE_OPTIONAL2]
+    for i, pdf_path in enumerate(optional_pdfs, start=1):
+        default_name = f"added{i}.pdf"
+        if not Path(pdf_path).exists():
+            print(f"Skipping optional PDF {i}: file not found ({pdf_path})")
+            continue
+
+        print(f"Extracting text from optional PDF {i}: {pdf_path}")
+        extra_content = extract_text_from_pdf(pdf_path)
+        if extra_content.startswith("ERROR"):
+            print(f"Warning: Could not process optional PDF {i}: {extra_content}")
         else:
-            splitexam = os.environ.get("split_exam")
-            print(splitexam)
-            if splitexam is False or splitexam == "False":
-                export_exam_to_pdf(exam, OUTPUT_EXAM_PATH)
-            if splitexam is True or splitexam == "True":
-                export_exam_and_answers(exam, OUTPUT_EXAM_PATH, OUTPUT_ANSW_PATH)
+            combined_content += "\n\n" + extra_content
+
+    # --- Now combined_content contains text from all valid PDFs ---
+    print("\nGenerating exam from combined content...")
+    exam = generate_mock_exam(combined_content)
+
+    if exam.startswith("ERROR"):
+        print(f"\n{exam}")
+    else:
+        splitexam = os.environ.get("split_exam")
+        print(f"Split exam mode: {splitexam}")
+
+        if splitexam in [False, "False", "false", None]:
+            export_exam_to_pdf(exam, OUTPUT_EXAM_PATH)
+        else:
+            export_exam_and_answers(exam, OUTPUT_EXAM_PATH, OUTPUT_ANSW_PATH)
+
