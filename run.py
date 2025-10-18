@@ -36,8 +36,9 @@ def generate_mock_exam(pdf_text: str):
     """
     Uses the extracted PDF text to generate a multiple-choice mock exam.
     """
+    numquestions = os.environ.get("num_questions")
     prompt = f"""
-    Based ONLY on the following text content, generate a mock exam consisting of 5 challenging multiple-choice questions.
+    Based ONLY on the following text content, generate a mock exam consisting of {numquestions} challenging multiple-choice questions.
 
     Each question MUST have:
     1. The Question text.
@@ -76,9 +77,11 @@ def export_exam_to_pdf(exam_text: str, output_path: str):
 
     # --- Title ---
     title_rect = fitz.Rect(margin, margin, width - margin, margin + 40)
+
+    examtitle = os.environ.get("exam_title")
     page.insert_textbox(
         title_rect,
-        "GENERATED MOCK EXAM",
+        examtitle,
         fontname="Times-Bold",
         fontsize=18,
         align=fitz.TEXT_ALIGN_CENTER
