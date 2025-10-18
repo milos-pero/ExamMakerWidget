@@ -43,6 +43,8 @@ def generate_mock_exam(pdf_text: str):
 
     numquestions = int(numMCquestions) + int(numFTBquestions) + int(numTFquestions)
 
+    lang = os.environ.get("language")
+
     prompt = f"""
     Based ONLY on the following text content, generate a mock exam consisting of {numquestions} challenging questions.
     The exam will have {numMCquestions} multiple-choice questions, {numFTBquestions} fill in the blank questions, {numTFquestions} true-false questions.
@@ -57,6 +59,8 @@ def generate_mock_exam(pdf_text: str):
     Do not include any introductory or concluding text, just the questions and answers.
     Ensure all questions and options are on separate lines for easy parsing.
     Make sure the answers are found within the following text.
+
+    The exam questions and answers have to be in {lang} language, no matter the language of the given text. Translate if necessary.
     
     --- TEXT CONTENT START ---
     {pdf_text}
