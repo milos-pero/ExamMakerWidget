@@ -168,15 +168,9 @@ if __name__ == "__main__":
         if exam.startswith("ERROR"):
             print(f"\n{exam}")
         else:
-            splitexam = os.environ.get("splitexam")
-            if splitexam is None or splitexam.lower() != "true":
-                export_result = export_exam_to_pdf(exam, OUTPUT_EXAM_PATH)
-            else:
-                export_result = export_exam_and_answers(exam, OUTPUT_EXAM_PATH, OUTPUT_ANSW_PATH)
-
-            print("\n" + "="*50)
-            if export_result is True:
-                print("EXAM GENERATION SUCCESSFUL!")
-            else:
-                print("EXAM GENERATION FAILED.")
-                print(export_result)
+            splitexam = os.environ.get("split_exam")
+            print(splitexam)
+            if splitexam is False or splitexam == "False":
+                export_exam_to_pdf(exam, OUTPUT_EXAM_PATH)
+            if splitexam is True or splitexam == "True":
+                export_exam_and_answers(exam, OUTPUT_EXAM_PATH, OUTPUT_ANSW_PATH)
