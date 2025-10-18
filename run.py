@@ -11,8 +11,8 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 PDF_FILE_PATH = "bio.pdf"
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-OUTPUT_EXAM_PATH = f"output\\Mock_Exam_Generated_{TIMESTAMP}.pdf"
-OUTPUT_ANSW_PATH = f"output\\Mock_Answers_Generated_{TIMESTAMP}.pdf"
+OUTPUT_EXAM_PATH = f"output/Mock_Exam_Generated_{TIMESTAMP}.pdf"
+OUTPUT_ANSW_PATH = f"output/Mock_Answers_Generated_{TIMESTAMP}.pdf"
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """
@@ -129,6 +129,7 @@ def export_exam_to_pdf(exam_text: str, output_path: str):
         return True
     except Exception as e:
         return f"ERROR: Could not save PDF file: {e}"
+    print(f"Exam exported to: {output_path}")
 
 def split_exam_text(exam_text: str):
     """
@@ -151,6 +152,7 @@ def export_exam_and_answers(exam_text: str, questions_pdf: str, answers_pdf: str
 
     q_result = export_exam_to_pdf(questions_text, questions_pdf)
     a_result = export_exam_to_pdf(answers_text, answers_pdf)
+    print(f"Questions exported to: {questions_pdf}")
 
     return q_result, a_result
 
