@@ -52,7 +52,7 @@ def generate_mock_exam(pdf_text: str):
     --- TEXT CONTENT END ---
     """
 
-    print("🧠 Generating exam with Gemini... (This may take a moment)")
+    print("Generating exam with Gemini... (This may take a moment)")
 
     try:
         response = model.generate_content(prompt)
