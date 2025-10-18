@@ -56,7 +56,7 @@ def generate_mock_exam(pdf_text: str):
 
     Do not include any introductory or concluding text, just the questions and answers.
     Ensure all questions and options are on separate lines for easy parsing.
-    Make sure the answers are found within the following text, and provide the page where the answer is located.
+    Make sure the answers are found within the following text.
     
     --- TEXT CONTENT START ---
     {pdf_text}
