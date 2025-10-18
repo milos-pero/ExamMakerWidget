@@ -36,18 +36,28 @@ def generate_mock_exam(pdf_text: str):
     """
     Uses the extracted PDF text to generate a multiple-choice mock exam.
     """
-    numquestions = os.environ.get("num_questions")
+
+    numMCquestions = os.environ.get("num_MC_questions")
+    numFTBquestions = os.environ.get("num_FTB_questions")
+    numTFquestions = os.environ.get("num_TF_questions")
+
+    numquestions = int(numMCquestions) + int(numFTBquestions) + int(numTFquestions)
+
     prompt = f"""
-    Based ONLY on the following text content, generate a mock exam consisting of {numquestions} challenging multiple-choice questions.
+    Based ONLY on the following text content, generate a mock exam consisting of {numquestions} challenging questions.
+    The exam will have {numMCquestions} multiple-choice questions, {numFTBquestions} fill in the blank questions, {numTFquestions} true-false questions.
 
     Each question MUST have:
     1. The Question text.
-    2. Exactly 4 possible answers, labeled A, B, C, and D.
-    3. The correct answer clearly indicated on a separate line as 'ANSWER: [Letter]'.
+    2. Exactly 4 possible answers, labeled A, B, C, and D if it is a multiple-choice question.
+    3. Exactly 4 possible answers, labeled A, B, C, and D if it is a fill in the blank question.
+    4. The correct answer clearly indicated on a separate line as 'ANSWER: [Letter]'.
+    5. Exactly 2 possible answers, labeled True or False if it is a true-false question.
 
     Do not include any introductory or concluding text, just the questions and answers.
     Ensure all questions and options are on separate lines for easy parsing.
-
+    Make sure the answers are found within the following text, and provide the page where the answer is located.
+    
     --- TEXT CONTENT START ---
     {pdf_text}
     --- TEXT CONTENT END ---
