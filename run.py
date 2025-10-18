@@ -8,7 +8,7 @@ genai.configure(api_key="AIzaSyADlBTWfleg_PLTvOZ23l-6mVu4mmHNrNE")
 
 model = genai.GenerativeModel("gemini-2.5-flash")
 
-PDF_FILE_PATH = "bio.pdf"
+PDF_FILE_PATH = "testPDFs\\bio.pdf"
 
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_EXAM_PATH = f"output\\Mock_Exam_Generated_{TIMESTAMP}.pdf"
