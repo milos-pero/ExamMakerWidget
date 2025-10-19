@@ -68,9 +68,10 @@ def generate_mock_exam(pdf_text: str):
     Each question must include:
     - Four labeled answers (A-D) or True/False options
     - A clearly marked correct answer line: "ANSWER: [Letter/True/False]"
+    - If the question is of True/False nature, write "True/False" at the start of it.
     Do NOT include any section headers like "Mock Exam:", "Instructions:", or "---".
-    The exam should be written in {lang}.
-    If the question is of True/False nature, write "True/False" at the start of it.
+    The exam must be written in {lang} language including the true/false text.
+    
 
     --- TEXT START ---
     {pdf_text}
