@@ -48,7 +48,7 @@ def generate_mock_exam(pdf_text: str):
     numMC = os.environ.get("num_MC_questions")
     numFTB = os.environ.get("num_FTB_questions")
     numTF = os.environ.get("num_TF_questions")
-    lang = os.environ.get("language", "English")
+    lang = os.environ.get("language")
 
     try:
         numquestions = int(numMC) + int(numFTB) + int(numTF)
@@ -70,6 +70,7 @@ def generate_mock_exam(pdf_text: str):
     - A clearly marked correct answer line: "ANSWER: [Letter/True/False]"
     Do NOT include any section headers like "Mock Exam:", "Instructions:", or "---".
     The exam should be written in {lang}.
+    If the question is of True/False nature, write "True/False" at the start of it.
 
     --- TEXT START ---
     {pdf_text}
@@ -147,46 +148,46 @@ def export_exam_to_pdf(exam_text: str, output_path: str, is_answers=False):
     story.append(Spacer(1, 12))
 
     # --- Process lines ---
-    question_counter = 0
+    question_counter = 1
     for line in exam_text.splitlines():
         line = line.strip()
         if not line:
             continue
 
-        # Detect new question
-        if line[0].isdigit() and line.find('.') < 3:
-            question_counter += 1
-            # Handle True/False formatting
-            if line.lower().startswith("true/false") or line.lower().startswith("true or false"):
-                line = (
-                    line.replace("True/False", "")
-                    .replace("True or False", "")
-                    .strip()
-                )
-                story.append(Paragraph(f"{question_counter}. {line}", styles["QuestionStyle"]))
-                story.append(Spacer(1, 4))
-                story.append(Paragraph("True / False", styles["AnswerStyle"]))
-            else:
-                story.append(Paragraph(line, styles["QuestionStyle"]))
-
-        # Multiple choice options
-        elif line.startswith(("A)", "B)", "C)", "D)")) or line.startswith(
-            ("A.", "B.", "C.", "D.")
-        ):
-            story.append(Paragraph(line, styles["AnswerStyle"]))
-
-        # Correct answer line
-        elif line.upper().startswith("ANSWER:"):
+        # --- Detect new question based on "ANSWER:" ---
+        if line.upper().startswith("ANSWER:"):
+            # Show the answer line or skip it depending on is_answers
             if is_answers:
-                # Format as "Question X: C"
                 answer = line.split(":", 1)[1].strip()
                 story.append(Paragraph(f"Question {question_counter}: {answer}", styles["CorrectStyle"]))
             else:
                 story.append(Paragraph(line, styles["CorrectStyle"]))
-            story.append(Spacer(1, 8))
 
-        else:
+            # Increment question number after each ANSWER:
+            question_counter += 1
+            continue
+
+        # --- Handle True/False formatting ---
+        if line.lower().startswith("true/false") or line.lower().startswith("true or false"):
+            line = (
+                line.replace("True/False", "")
+                .replace("True or False", "")
+                .strip()
+            )
+            story.append(Paragraph(f"{line}", styles["QuestionStyle"]))
+            story.append(Spacer(1, 10))
+            story.append(Paragraph("True / False", styles["AnswerStyle"]))
+            continue
+
+        # --- Multiple choice options ---
+        if line.startswith(("A)", "B)", "C)", "D)")) or line.startswith(("A.", "B.", "C.", "D.")):
             story.append(Paragraph(line, styles["AnswerStyle"]))
+            continue
+        story.append(Spacer(1, 10))
+
+        # --- Regular question line ---
+        story.append(Paragraph(f"{line}", styles["QuestionStyle"]))
+        story.append(Spacer(1, 10))
 
         # Optional separator for readability
         if not is_answers and line.upper().startswith("ANSWER:"):
@@ -264,7 +265,7 @@ if __name__ == "__main__":
     if exam.startswith("ERROR"):
         print(exam)
     else:
-        splitexam = os.environ.get("split_exam")
+        splitexam = os.environ.get("split_exam", "False")
         if splitexam in [False, "False", "false", None]:
             export_exam_to_pdf(exam, OUTPUT_EXAM_PATH)
         else:
